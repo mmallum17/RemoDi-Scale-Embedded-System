@@ -1,0 +1,10 @@
+.cproject
+.mxproject
+.project
+.settings
+RemoDi Scale.elf.launch
+RemoDi Scale.ioc
+mx.scratch
+STM32L152RE_FLASH.ld
+startup
+Debug
