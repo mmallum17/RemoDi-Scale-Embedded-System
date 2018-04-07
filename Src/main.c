@@ -53,6 +53,9 @@
 
 /* USER CODE BEGIN Includes */
 #include "ra6963.h"
+#include "adc.h"
+#include "AD7190.h"
+#include "esp8266.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -87,7 +90,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  unsigned long buffer;
+  float voltage;
+  char voltString[20];
+  char display[30];
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -115,20 +121,79 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   ra6963Init();
+
   ra6963ClearGraphic();
   ra6963ClearText();
   ra6963ClearCG();
-  ra6963TextGoTo(8,1);
-  ra6963WriteString("radzio.dxp.pl");
+
+  wifiConnect();
+  serverConnect();
+  serverClose();
+
+/*  if(adcInit(1) && adcInit(2))
+  {
+	  ra6963TextGoTo(0, 0);
+	  ra6963WriteString("Parts Present");
+  }
+  else
+  {
+	  ra6963TextGoTo(0, 0);
+	  ra6963WriteString("Part(s) Not Present");
+  }
+  adcRangeSetup(0, AD7190_CONF_GAIN_128, 1);
+  adcRangeSetup(0, AD7190_CONF_GAIN_128, 2);
+
+  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 1);
+  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 1);
+  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 1);
+  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 1);
+  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 2);
+  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 2);
+  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 2);
+  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN 3 */
     while (1)
   {
+  	 /* // Read Channel 1 of ADC 1
+  	  adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 1);
+  	  buffer = adcSingleConversion(1);
+  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
+  	  floatToString(voltage, voltString, 2);
+  	  sprintf(display,"ADC1: %s mV", voltString);
+  	  ra6963ClearText();
+	  ra6963TextGoTo(0, 0);
+	  ra6963WriteString(display);
 
+  	  // Read Channel 2 of ADC 1
+  	  adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 1);
+  	  buffer = adcSingleConversion(1);
+  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
+  	  floatToString(voltage, voltString, 2);
+  	  sprintf(display,"      %s mV", voltString);
+	  ra6963TextGoTo(0, 1);
+	  ra6963WriteString(display);
 
+  	  // Read Channel 1 of ADC 2
+  	  adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 2);
+  	  buffer = adcSingleConversion(2);
+  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
+  	  floatToString(voltage, voltString, 2);
+  	  sprintf(display,"ADC2: %s mV", voltString);
+	  ra6963TextGoTo(0, 2);
+	  ra6963WriteString(display);
 
+  	  // Read Channel 2 of ADC 2
+  	  adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 2);
+  	  buffer = adcSingleConversion(2);
+  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
+  	  floatToString(voltage, voltString, 2);
+  	  sprintf(display,"      %s mV", voltString);
+	  ra6963TextGoTo(0, 3);
+	  ra6963WriteString(display);
+  	  HAL_Delay(500);*/
   }
   /* USER CODE END 3 */
 
