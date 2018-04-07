@@ -56,6 +56,7 @@
 #include "adc.h"
 #include "AD7190.h"
 #include "esp8266.h"
+#include "buttons.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -67,7 +68,9 @@ UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+FATFS mynewdiskFatFs; /* File system object for User logical drive */
+FIL MyFile; /* File object */
+char mynewdiskPath[4]; /* User logical drive path */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -79,7 +82,9 @@ static void MX_RTC_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-
+void sdInit();
+void sd_test();
+void setSdSpi();
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -90,10 +95,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  unsigned long buffer;
+  /*unsigned long buffer;
   float voltage;
   char voltString[20];
-  char display[30];
+  char display[30];*/
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -116,21 +121,24 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI1_Init();
   MX_UART4_Init();
-  MX_FATFS_Init();
+  //MX_FATFS_Init();
   MX_RTC_Init();
 
   /* USER CODE BEGIN 2 */
+  //sd_test();
   ra6963Init();
 
   ra6963ClearGraphic();
   ra6963ClearText();
   ra6963ClearCG();
 
-  wifiConnect();
+  /*ra6963TextGoTo(0, 0);
+  ra6963WriteString("Hello World");*/
+  /*wifiConnect();
   serverConnect();
-  serverClose();
+  serverClose();*/
 
-/*  if(adcInit(1) && adcInit(2))
+  if(adcInit(1) && adcInit(2))
   {
 	  ra6963TextGoTo(0, 0);
 	  ra6963WriteString("Parts Present");
@@ -150,7 +158,7 @@ int main(void)
   adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 2);
   adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 2);
   adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 2);
-  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);*/
+  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -472,7 +480,154 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	//uint8_t key;
+	uint8_t col;
+	//char display[30];
+	delay(50);
+	if(GPIO_Pin == GPIO_PIN_5)
+	{
+		ra6963ClearText();
+		ra6963TextGoTo(0, 0);
+		ra6963WriteString("1st Button Matrix");
+		/*col = getCol(1);
+		if(col >= 0 && col <= 11)
+		{
+			switch(col)
+			{
+				case CALIBRATE:
+					calibrate();
+					break;
+				default:
+					ra6963ClearText();
+					ra6963TextGoTo(0, 0);
+					ra6963WriteString("NOT CALIBRATION MODE");
+			}
+		}*/
 
+/*		if(col >= 1 && col <= 12)
+		{
+			//ra6963ClearText();
+			//count++;
+			//ra6963TextGoTo(count, 0);
+			//sprintf(display, "%d", count);
+			//ra6963WriteString(rowOneStrings[col - 1]);
+			//ra6963WriteString(display);
+			//key = getKey();
+			//ra6963TextGoTo(count, 1);
+			//sprintf(display, "%d", key);
+			//ra6963WriteString(buttonStrings[key]);
+		}*/
+		setAllCols();
+		while(readRow(1));
+	}
+	else if(GPIO_Pin == GPIO_PIN_6)
+	{
+		ra6963ClearText();
+		ra6963TextGoTo(0, 0);
+		ra6963WriteString("2nd Button Matrix");
+		/*col = getCol(2);
+		if(col >= 0 && col <= 11)
+		{
+			ra6963ClearText();
+			ra6963TextGoTo(0, 0);
+			ra6963WriteString("NOT CALIBRATION MODE");
+			//count++;
+			//ra6963ClearText();
+			//ra6963TextGoTo(count, 0);
+			//sprintf(display, "%d", count);
+			//ra6963WriteString(rowTwoStrings[col - 1]);
+			//ra6963WriteString(display);
+			//key = getKey();
+			//ra6963TextGoTo(count, 1);
+			//ra6963WriteString(buttonStrings[key]);
+		}*/
+		setAllCols();
+		while(readRow(2));
+	}
+}
+
+void sdInit()
+{
+	if(FATFS_LinkDriver(&SD_Driver, mynewdiskPath) == 0)
+	{
+		f_mount(&mynewdiskFatFs, (TCHAR const*)mynewdiskPath, 0);
+	}
+}
+
+void sd_test()
+{
+	uint32_t wbytes; /* File write counts */
+	uint8_t wtext[] = "text to write logical disk"; /* File write buffer */
+	//char line[15];
+
+	setSdSpi();
+
+	if(FATFS_LinkDriver(&SD_Driver, mynewdiskPath) == 0)
+	{
+		/*ra6963ClearText();
+		ra6963TextGoTo(0, 0);
+		ra6963WriteString("Linked");
+		HAL_Delay(1000);*/
+		if(f_mount(&mynewdiskFatFs, (TCHAR const*)mynewdiskPath, 0) == FR_OK)
+		{
+			/*ra6963ClearText();
+			ra6963TextGoTo(0, 0);
+			ra6963WriteString("Mounted");
+			HAL_Delay(1000);*/
+			if(f_open(&MyFile, "STM35.TXT", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+			//if(f_open(&MyFile, "STM32.TXT", FA_READ) == FR_OK)
+			{
+				/*ra6963ClearText();
+				ra6963TextGoTo(0, 0);
+				ra6963WriteString("Opened");
+				HAL_Delay(1000);*/
+				if(f_write(&MyFile, wtext, sizeof(wtext), (void *)&wbytes) == FR_OK)
+//				f_gets(line, sizeof(line), &MyFile);
+				{
+					/*ra6963ClearText();
+					ra6963TextGoTo(0, 0);
+					ra6963WriteString("Written");*/
+//					ra6963WriteString("Read");
+//					ra6963WriteString(line);
+//					HAL_Delay(1000);
+					f_close(&MyFile);
+					/*ra6963ClearText();
+					ra6963TextGoTo(0, 0);
+					ra6963WriteString("Closed");
+					HAL_Delay(1000);*/
+				}
+			}
+		}
+	}
+	FATFS_UnLinkDriver(mynewdiskPath);
+	/*ra6963ClearText();
+	ra6963TextGoTo(0, 0);
+	ra6963WriteString("Unlinked");
+	HAL_Delay(1000);*/
+}
+
+void setSdSpi()
+{
+	//SPI1 parameter configuration
+	hspi1.Instance = SPI1;
+	hspi1.Init.Mode = SPI_MODE_MASTER;
+	hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+	hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+	hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+	hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+	hspi1.Init.NSS = SPI_NSS_SOFT;
+	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+	hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+	hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+	hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+	hspi1.Init.CRCPolynomial = 10;
+	if (HAL_SPI_Init(&hspi1) != HAL_OK)
+	{
+		_Error_Handler(__FILE__, __LINE__);
+	}
+}
 /* USER CODE END 4 */
 
 /**

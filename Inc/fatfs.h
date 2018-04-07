@@ -49,13 +49,14 @@
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __fatfs_H
 #define __fatfs_H
+
 #ifdef __cplusplus
  extern "C" {
 #endif
 
 #include "ff.h"
 #include "ff_gen_drv.h"
-#include "user_diskio.h" /* defines USER_Driver as external */
+#include <sd_diskio.h> /* defines USER_Driver as external */
 
 /* USER CODE BEGIN Includes */
 
