@@ -52,7 +52,7 @@
 #include "fatfs.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "ra6963.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -114,16 +114,20 @@ int main(void)
   MX_RTC_Init();
 
   /* USER CODE BEGIN 2 */
-
+  ra6963Init();
+  ra6963ClearGraphic();
+  ra6963ClearText();
+  ra6963ClearCG();
+  ra6963TextGoTo(8,1);
+  ra6963WriteString("radzio.dxp.pl");
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-  /* USER CODE END WHILE */
-
   /* USER CODE BEGIN 3 */
+    while (1)
+  {
+
+
 
   }
   /* USER CODE END 3 */
