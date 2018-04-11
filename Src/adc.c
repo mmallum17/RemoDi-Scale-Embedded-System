@@ -30,7 +30,18 @@ void adcCalibrate(unsigned char mode, unsigned char channel, uint8_t chip)
 	adcChipSelect(chip);
 	AD7190_Calibrate(mode, channel);
 	adcChipDeselect(chip);
+}
 
+void adcCalibrateAll()
+{
+	adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 1);
+	adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 1);
+	adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 1);
+	adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 1);
+	adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 2);
+	adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 2);
+	adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 2);
+	adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);
 }
 
 void adcChannelSelect(unsigned short channel, uint8_t chip)
@@ -45,6 +56,15 @@ unsigned long adcSingleConversion(uint8_t chip)
 	unsigned long buffer;
 	adcChipSelect(chip);
 	buffer = AD7190_SingleConversion();
+	adcChipDeselect(chip);
+	return buffer;
+}
+
+unsigned long adcContinuousReadAvg(unsigned char sampleNumber, uint8_t chip)
+{
+	unsigned long buffer;
+	adcChipSelect(chip);
+	buffer = AD7190_ContinuousReadAvg(50);
 	adcChipDeselect(chip);
 	return buffer;
 }
@@ -96,6 +116,6 @@ void floatToString(float value, char* floatString, int afterpoint)
 	}
 	else
 	{
-		sprintf(floatString, "%lu.%.*lu", intValue, afterpoint, intFrac);
+		sprintf(floatString, "%02lu.%.*lu", intValue, afterpoint, intFrac);
 	}
 }

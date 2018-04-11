@@ -84,6 +84,8 @@ void ra6963TextGoTo(int x, int y);
 void ra6963Rectangle(unsigned char x, unsigned char y, unsigned char b, unsigned char a);
 void ra6963Circle(unsigned char cx, unsigned char cy ,unsigned char radius);
 void ra6963Line(int X1, int Y1,int X2,int Y2);
+void drawImage(int x, int y, int height, int width, const unsigned char* graphic);
+void ra6963WriteBigChar(unsigned char number, int x, int y);
 
 
 

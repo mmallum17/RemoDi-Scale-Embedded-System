@@ -8,30 +8,30 @@
 #ifndef BUTTONS_H_
 #define BUTTONS_H_
 
-#define	ZERO_FN			0
-#define UNITS 			1
-#define MENU			2
-#define UP				3
-#define DISPLAY_TARE	4
-#define TARE			5
-#define ENTER			6
-#define RIGHT			7
-#define LEFT			8
-#define CALIBRATE		9
-#define	DOWN			10
-#define GROSS_NET		11
-#define THREE			12
-#define TWO				13
-#define ONE				14
-#define FIVE			15
-#define SIX				16
-#define FOUR			17
-#define EIGHT			18
-#define NINE			19
-#define SEVEN			20
-#define PERIOD			21
-#define ZERO			22
-#define DELETE			23
+#define	ZERO_FN			11
+#define UNITS 			10
+#define MENU			9
+#define UP				8
+#define DISPLAY_TARE	7
+#define TARE			6
+#define ENTER			5
+#define RIGHT			4
+#define LEFT			3
+#define CALIBRATE		2
+#define	DOWN			1
+#define GROSS_NET		0
+#define THREE			23
+#define TWO				22
+#define ONE				21
+#define FIVE			20
+#define SIX				19
+#define FOUR			18
+#define EIGHT			17
+#define NINE			16
+#define SEVEN			15
+#define PERIOD			14
+#define ZERO			13
+#define DELETE			12
 
 void buttonsInit();
 uint8_t getKey();

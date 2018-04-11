@@ -52,11 +52,14 @@
 #include "fatfs.h"
 
 /* USER CODE BEGIN Includes */
-#include "ra6963.h"
-#include "adc.h"
 #include "AD7190.h"
-#include "esp8266.h"
+#include "adc.h"
 #include "buttons.h"
+#include "eeprom.h"
+#include "esp8266.h"
+#include "ra6963.h"
+#include <stdlib.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -68,9 +71,35 @@ UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+const char* buttonStrings[24] = {"ZERO", "UNITS", "MENU", "UP", "DISPLAY TARE", "TARE", "ENTER", "RIGHT", "LEFT", "CALIBRATE", "DOWN", "GROSS/NET", "3", "2", "1", "5", "6", "4", "8", "9", "7", ".", "0", "DELETE"};
+int count = 0;
 FATFS mynewdiskFatFs; /* File system object for User logical drive */
 FIL MyFile; /* File object */
 char mynewdiskPath[4]; /* User logical drive path */
+float calibrationSlope0 = 0;
+float calibrationIntercept0 = 0;
+float calibrationSlope1 = 0;
+float calibrationIntercept1 = 0;
+float calibrationSlope2 = 0;
+float calibrationIntercept2 = 0;
+float calibrationSlope3 = 0;
+float calibrationIntercept3 = 0;
+const unsigned char kChar [] = {
+0xFC, 0x00, 0xFC, 0xFC, 0x00, 0xF8, 0xFC, 0x01, 0xF0, 0xFC, 0x03, 0xE0, 0xFC, 0x07, 0xE0, 0xFC,
+0x0F, 0xC0, 0xFC, 0x0F, 0x80, 0xFC, 0x1F, 0x00, 0xFC, 0x3E, 0x00, 0xFC, 0x7E, 0x00, 0xFC, 0xFC,
+0x00, 0xFC, 0xF8, 0x00, 0xFD, 0xF0, 0x00, 0xFF, 0xE0, 0x00, 0xFF, 0xE0, 0x00, 0xFF, 0xC0, 0x00,
+0xFF, 0xC0, 0x00, 0xFF, 0xE0, 0x00, 0xFF, 0xE0, 0x00, 0xFD, 0xF0, 0x00, 0xFC, 0xF8, 0x00, 0xFC,
+0xFC, 0x00, 0xFC, 0x7E, 0x00, 0xFC, 0x3E, 0x00, 0xFC, 0x1F, 0x00, 0xFC, 0x0F, 0x80, 0xFC, 0x0F,
+0xC0, 0xFC, 0x07, 0xE0, 0xFC, 0x03, 0xE0, 0xFC, 0x01, 0xF0, 0xFC, 0x00, 0xF8, 0xFC, 0x00, 0xFC
+};
+const unsigned char gChar [] = {
+0x00, 0x3C, 0x00, 0x07, 0xFF, 0xE0, 0x1F, 0xFF, 0xF8, 0x3F, 0xFF, 0xFC, 0x3F, 0xFF, 0xFC, 0x7E,
+0x00, 0x7E, 0x7C, 0x00, 0x3E, 0x7C, 0x00, 0x3E, 0x7C, 0x00, 0x3E, 0xFC, 0x00, 0x3F, 0xFC, 0x00,
+0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00,
+0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC,
+0x00, 0x3F, 0xFC, 0x00, 0x3F, 0x7C, 0x00, 0x3E, 0x7C, 0x00, 0x3E, 0x7C, 0x00, 0x3E, 0x7E, 0x00,
+0x7E, 0x3F, 0xFF, 0xFC, 0x3F, 0xFF, 0xFC, 0x1F, 0xFF, 0xF8, 0x07, 0xFF, 0xE0, 0x00, 0x3C, 0x00
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -79,12 +108,21 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_UART4_Init(void);
 static void MX_RTC_Init(void);
-
-/* USER CODE BEGIN PFP */
-/* Private function prototypes -----------------------------------------------*/
 void sdInit();
 void sd_test();
 void setSdSpi();
+void setAdcSpi();
+void calibrate();
+float getLoadCellVoltage(uint8_t loadCell);
+void initCalibrationArray(Calibration_Array *arr, int initialSize);
+void insertArray(Calibration_Array *arr, Calibration_Pair pair);
+void freeArray(Calibration_Array *arr);
+void linearReg(Calibration_Array *arr, float* calibrationSlope, float* calibrationIntercept);
+float getAverageLoadCellVoltage(uint8_t loadCell);
+void displayWeight(float weight);
+
+/* USER CODE BEGIN PFP */
+/* Private function prototypes -----------------------------------------------*/
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -95,10 +133,15 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  /*unsigned long buffer;
   float voltage;
-  char voltString[20];
-  char display[30];*/
+  float totalWeight;
+  float weight[4] = {0};
+  char weightString[10] = {0};
+  char weightZeroString[10] = {0};
+  char weightOneString[10] = {0};
+  char weightTwoString[10] = {0};
+  char weightThreeString[10] = {0};
+  char display[30] = {0};
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -125,83 +168,166 @@ int main(void)
   MX_RTC_Init();
 
   /* USER CODE BEGIN 2 */
-  //sd_test();
+  buttonsInit();
   ra6963Init();
-
-  ra6963ClearGraphic();
-  ra6963ClearText();
-  ra6963ClearCG();
+  setSdSpi();
+  sdInit();
+  setAdcSpi();
 
   /*ra6963TextGoTo(0, 0);
-  ra6963WriteString("Hello World");*/
+  ra6963WriteString("RemoDi Scale");
+
+  ra6963TextGoTo(21, 0);
+  ra6963WriteString("12:36 PM");
+
+  ra6963Rectangle(0, 14, 240, 100);
+  ra6963Rectangle(1, 15, 238, 98);
+
+  ra6963WriteBigChar('0', 9, 24);
+  ra6963WriteBigChar('0', 57, 24);
+  ra6963WriteBigChar('0', 113, 24);
+  ra6963WriteBigChar('0', 161, 24);
+
+  ra6963Rectangle(99, 96, 8, 8);
+  ra6963Rectangle(100, 97, 6, 6);
+  ra6963Rectangle(101, 98, 4, 4);
+  ra6963Rectangle(102, 99, 2, 2);
+  drawImage(211, 27, 32, 24, kChar);
+  drawImage(211, 69, 32, 24, gChar);
+
+  ra6963TextGoTo(0, 15);
+  ra6963WriteString("ALERT:");*/
+  /*ra6963ClearGraphic();
+  ra6963ClearText();
+  ra6963ClearCG();*/
+
   /*wifiConnect();
-  serverConnect();
-  serverClose();*/
+  serverConnect();*/
+
+  //sd_test();
+
+
+
+  calibrationSlope0 = readEepromFloat(CAL_SLOPE_ADD_0);
+  calibrationIntercept0 = readEepromFloat(CAL_INT_ADD_0);
+  calibrationSlope1 = readEepromFloat(CAL_SLOPE_ADD_1);
+  calibrationIntercept1 = readEepromFloat(CAL_INT_ADD_1);
+  calibrationSlope2 = readEepromFloat(CAL_SLOPE_ADD_2);
+  calibrationIntercept2 = readEepromFloat(CAL_INT_ADD_2);
+  calibrationSlope3 = readEepromFloat(CAL_SLOPE_ADD_3);
+  calibrationIntercept3 = readEepromFloat(CAL_INT_ADD_3);
 
   if(adcInit(1) && adcInit(2))
   {
-	  ra6963TextGoTo(0, 0);
-	  ra6963WriteString("Parts Present");
+	  ra6963TextGoTo(0,0);
+ 	  ra6963WriteString("Part Present");
   }
   else
   {
-	  ra6963TextGoTo(0, 0);
-	  ra6963WriteString("Part(s) Not Present");
+ 	  ra6963TextGoTo(0,0);
+ 	  ra6963WriteString("Part(s) Not Present");
   }
   adcRangeSetup(0, AD7190_CONF_GAIN_128, 1);
   adcRangeSetup(0, AD7190_CONF_GAIN_128, 2);
 
-  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 1);
+  adcCalibrateAll();
+/*  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 1);
   adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 1);
   adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 1);
   adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 1);
   adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 2);
   adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 2);
   adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 2);
-  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);
+  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN 3 */
-    while (1)
+  while (1)
   {
-  	 /* // Read Channel 1 of ADC 1
-  	  adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 1);
-  	  buffer = adcSingleConversion(1);
-  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
-  	  floatToString(voltage, voltString, 2);
-  	  sprintf(display,"ADC1: %s mV", voltString);
-  	  ra6963ClearText();
+	  /*voltage = getAverageLoadCellVoltage(0);
+	  floatToString(voltage, display, 4);
+	  ra6963ClearText();
 	  ra6963TextGoTo(0, 0);
 	  ra6963WriteString(display);
 
-  	  // Read Channel 2 of ADC 1
-  	  adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 1);
-  	  buffer = adcSingleConversion(1);
-  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
-  	  floatToString(voltage, voltString, 2);
-  	  sprintf(display,"      %s mV", voltString);
+	  voltage = getAverageLoadCellVoltage(1);
+	  floatToString(voltage, display, 4);
 	  ra6963TextGoTo(0, 1);
 	  ra6963WriteString(display);
 
-  	  // Read Channel 1 of ADC 2
-  	  adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 2);
-  	  buffer = adcSingleConversion(2);
-  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
-  	  floatToString(voltage, voltString, 2);
-  	  sprintf(display,"ADC2: %s mV", voltString);
+	  voltage = getAverageLoadCellVoltage(2);
+	  floatToString(voltage, display, 4);
 	  ra6963TextGoTo(0, 2);
 	  ra6963WriteString(display);
 
-  	  // Read Channel 2 of ADC 2
-  	  adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 2);
-  	  buffer = adcSingleConversion(2);
-  	  voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
-  	  floatToString(voltage, voltString, 2);
-  	  sprintf(display,"      %s mV", voltString);
+	  voltage = getAverageLoadCellVoltage(3);
+	  floatToString(voltage, display, 4);
 	  ra6963TextGoTo(0, 3);
 	  ra6963WriteString(display);
-  	  HAL_Delay(500);*/
+
+	  HAL_Delay(500);*/
+	  voltage = getLoadCellVoltage(0);
+	  weight[0] = voltage * calibrationSlope0 + calibrationIntercept0;
+	  floatToString(weight[0], weightZeroString, 2);
+	  voltage = getLoadCellVoltage(1);
+	  weight [1] = voltage * calibrationSlope1 + calibrationIntercept1;
+	  floatToString(weight[1], weightOneString, 2);
+	  voltage = getLoadCellVoltage(2);
+	  weight[2] = voltage * calibrationSlope2 + calibrationIntercept2;
+	  floatToString(weight[2], weightTwoString, 2);
+	  voltage = getLoadCellVoltage(3);
+	  weight[3] = voltage * calibrationSlope3 + calibrationIntercept3;
+	  floatToString(weight[3], weightThreeString, 2);
+	  totalWeight = (weight[0] + weight[1] + weight[2] + weight[3]) / 4;
+
+	  /*displayWeight(totalWeight);*/
+	  /*floatToString(totalWeight, weightString, 2);
+	  sprintf(display,"%s kg", weightString);
+	  ra6963ClearText();
+	  ra6963TextGoTo(0,0);
+	  ra6963WriteString(display);*/
+
+	  sprintf(display, "L,%s,%s,%s,%s", weightZeroString, weightOneString, weightTwoString, weightThreeString);
+	  serverWrite(display, 10);
+	  setSdSpi();
+	  if(f_open(&MyFile, "LOG.CSV", FA_OPEN_ALWAYS | FA_WRITE) == FR_OK)
+	  {
+		  f_lseek(&MyFile, f_size(&MyFile));
+		  f_puts(display, &MyFile);
+		  f_putc('\n', &MyFile);
+		  f_close(&MyFile);
+	  }
+	  setAdcSpi();
+
+	  /*floatToString(calibrationSlope0, weightString, 2);
+	  ra6963TextGoTo(0,1);
+	  ra6963WriteString(weightString);
+	  floatToString(calibrationIntercept0, weightString, 2);
+	  ra6963TextGoTo(10,1);
+	  ra6963WriteString(weightString);
+
+	  floatToString(calibrationSlope1, weightString, 2);
+	  ra6963TextGoTo(0,2);
+	  ra6963WriteString(weightString);
+	  floatToString(calibrationIntercept1, weightString, 2);
+	  ra6963TextGoTo(10,2);
+	  ra6963WriteString(weightString);
+
+	  floatToString(calibrationSlope2, weightString, 2);
+	  ra6963TextGoTo(0,3);
+	  ra6963WriteString(weightString);
+	  floatToString(calibrationIntercept2, weightString, 2);
+	  ra6963TextGoTo(10,3);
+	  ra6963WriteString(weightString);
+
+	  floatToString(calibrationSlope3, weightString, 2);
+	  ra6963TextGoTo(0,4);
+	  ra6963WriteString(weightString);
+	  floatToString(calibrationIntercept3, weightString, 2);
+	  ra6963TextGoTo(10,4);
+	  ra6963WriteString(weightString);*/
+	  HAL_Delay(500);
   }
   /* USER CODE END 3 */
 
@@ -488,10 +614,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	delay(50);
 	if(GPIO_Pin == GPIO_PIN_5)
 	{
-		ra6963ClearText();
-		ra6963TextGoTo(0, 0);
-		ra6963WriteString("1st Button Matrix");
-		/*col = getCol(1);
+		col = getCol(1);
 		if(col >= 0 && col <= 11)
 		{
 			switch(col)
@@ -504,7 +627,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 					ra6963TextGoTo(0, 0);
 					ra6963WriteString("NOT CALIBRATION MODE");
 			}
-		}*/
+		}
 
 /*		if(col >= 1 && col <= 12)
 		{
@@ -524,10 +647,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	}
 	else if(GPIO_Pin == GPIO_PIN_6)
 	{
-		ra6963ClearText();
-		ra6963TextGoTo(0, 0);
-		ra6963WriteString("2nd Button Matrix");
-		/*col = getCol(2);
+		col = getCol(2);
 		if(col >= 0 && col <= 11)
 		{
 			ra6963ClearText();
@@ -542,92 +662,481 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			//key = getKey();
 			//ra6963TextGoTo(count, 1);
 			//ra6963WriteString(buttonStrings[key]);
-		}*/
+		}
 		setAllCols();
 		while(readRow(2));
 	}
+}
+
+void setAdcSpi()
+{
+	MX_SPI1_Init();
+}
+
+
+void setSdSpi()
+{
+	 //SPI1 parameter configuration
+	  hspi1.Instance = SPI1;
+	  hspi1.Init.Mode = SPI_MODE_MASTER;
+	  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+	  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+	  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+	  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+	  hspi1.Init.NSS = SPI_NSS_SOFT;
+	  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+	  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+	  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+	  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+	  hspi1.Init.CRCPolynomial = 10;
+	  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+	  {
+	    _Error_Handler(__FILE__, __LINE__);
+	  }
+}
+
+void calibrate()
+{
+	static Calibration_Array LC0;
+	static Calibration_Array LC1;
+	static Calibration_Array LC2;
+	static Calibration_Array LC3;
+	static uint8_t init = 0;
+	Calibration_Pair tmp = {0, 0};
+	uint8_t key;
+	float cWeight;
+	char cWeightStr[10] = {0};
+	char display [30];
+
+	// Initialize arrays if not already initialized
+	if(!init)
+	{
+		initCalibrationArray(&LC0, 7);
+		initCalibrationArray(&LC1, 7);
+		initCalibrationArray(&LC2, 7);
+		initCalibrationArray(&LC3, 7);
+		init = 1;
+	}
+
+	ra6963ClearText();
+	ra6963TextGoTo(0, 0);
+	ra6963WriteString("CALIBRATION MODE");
+
+	// Wait for weight to be placed on scale
+	ra6963TextGoTo(0, 2);
+	ra6963WriteString("Press Enter After Calibrated");
+	ra6963TextGoTo(0, 3);
+	ra6963WriteString("Weight is Placed on Scale!");
+	do
+	{
+		key = getKey();
+	}while(key != ENTER);
+
+	//Read ADC values
+	adcCalibrateAll();
+	tmp.voltage = getAverageLoadCellVoltage(0);
+	insertArray(&LC0, tmp);
+	tmp.voltage = getAverageLoadCellVoltage(1);
+	insertArray(&LC1, tmp);
+	tmp.voltage = getAverageLoadCellVoltage(2);
+	insertArray(&LC2, tmp);
+	tmp.voltage = getAverageLoadCellVoltage(3);
+	insertArray(&LC3, tmp);
+	/*ra6963ClearText();
+
+	int length = LC0.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC0.array[i].voltage;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		delay(500);
+	}
+
+	ra6963ClearText();
+
+	length = LC1.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC1.array[i].voltage;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		delay(500);
+	}
+
+	ra6963ClearText();
+
+	length = LC2.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC2.array[i].voltage;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		delay(500);
+	}
+
+	ra6963ClearText();
+
+	length = LC3.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC3.array[i].voltage;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		delay(500);
+	}*/
+	//Get Weight
+	ra6963TextGoTo(0, 5);
+	ra6963WriteString("Enter Weight: ");
+	//cWeight  = atof(str);
+	//floatToString(cWeight, display, 2);
+	//ra6963TextGoTo(14, 5);
+	//ra6963WriteString("1");
+	do
+	{
+		key = getKey();
+		switch(key)
+		{
+			case ZERO:
+				strcat(cWeightStr, "0");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("0");
+				break;
+			case ONE:
+				strcat(cWeightStr, "1");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("1");
+				break;
+			case TWO:
+				strcat(cWeightStr, "2");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("2");
+				break;
+			case THREE:
+				strcat(cWeightStr, "3");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("3");
+				break;
+			case FOUR:
+				strcat(cWeightStr, "4");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("4");
+				break;
+			case FIVE:
+				strcat(cWeightStr, "5");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("5");
+				break;
+			case SIX:
+				strcat(cWeightStr, "6");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("6");
+				break;
+			case SEVEN:
+				strcat(cWeightStr, "7");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("7");
+				break;
+			case EIGHT:
+				strcat(cWeightStr, "8");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("8");
+				break;
+			case NINE:
+				strcat(cWeightStr, "9");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString("9");
+				break;
+			case PERIOD:
+				strcat(cWeightStr, ".");
+				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
+				ra6963WriteString(".");
+				break;
+		}
+	}while(key != ENTER);
+	cWeight  = atof(cWeightStr);
+	LC0.array[LC0.used - 1].weight = cWeight;
+	LC1.array[LC1.used - 1].weight = cWeight;
+	LC2.array[LC2.used - 1].weight = cWeight;
+	LC3.array[LC3.used - 1].weight = cWeight;
+
+/*	ra6963ClearText();
+
+	int length = LC0.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC0.array[i].voltage;
+		float tmpWeight = LC0.array[i].weight;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		floatToString(tmpWeight, cWeightStr, 2);
+		ra6963TextGoTo(10, i);
+		ra6963WriteString(cWeightStr);
+		delay(1000);
+	}
+
+	ra6963ClearText();
+
+	length = LC1.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC1.array[i].voltage;
+		float tmpWeight = LC1.array[i].weight;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		floatToString(tmpWeight, cWeightStr, 2);
+		ra6963TextGoTo(10, i);
+		ra6963WriteString(cWeightStr);
+		delay(1000);
+	}
+
+	ra6963ClearText();
+
+	length = LC2.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC2.array[i].voltage;
+		float tmpWeight = LC2.array[i].weight;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		floatToString(tmpWeight, cWeightStr, 2);
+		ra6963TextGoTo(10, i);
+		ra6963WriteString(cWeightStr);
+		delay(1000);
+	}
+
+	ra6963ClearText();
+
+	length = LC3.used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = LC3.array[i].voltage;
+		float tmpWeight = LC3.array[i].weight;
+		floatToString(tmpVoltage, cWeightStr, 2);
+		ra6963TextGoTo(0, i);
+		ra6963WriteString(cWeightStr);
+		floatToString(tmpWeight, cWeightStr, 2);
+		ra6963TextGoTo(10, i);
+		ra6963WriteString(cWeightStr);
+		delay(1000);
+	}*/
+	floatToString(cWeight, display, 2);
+	ra6963TextGoTo(0, 6);
+	ra6963WriteString(display);
+	linearReg(&LC0, &calibrationSlope0, &calibrationIntercept0);
+	writeEepromFloat(CAL_SLOPE_ADD_0, calibrationSlope0);
+	writeEepromFloat(CAL_INT_ADD_0, calibrationIntercept0);
+	linearReg(&LC1, &calibrationSlope1, &calibrationIntercept1);
+	writeEepromFloat(CAL_SLOPE_ADD_1, calibrationSlope1);
+	writeEepromFloat(CAL_INT_ADD_1, calibrationIntercept1);
+	linearReg(&LC2, &calibrationSlope2, &calibrationIntercept2);
+	writeEepromFloat(CAL_SLOPE_ADD_2, calibrationSlope2);
+	writeEepromFloat(CAL_INT_ADD_2, calibrationIntercept2);
+	linearReg(&LC3, &calibrationSlope3, &calibrationIntercept3);
+	writeEepromFloat(CAL_SLOPE_ADD_3, calibrationSlope3);
+	writeEepromFloat(CAL_INT_ADD_3, calibrationIntercept3);
+}
+
+void linearReg(Calibration_Array *arr, float* calibrationSlope, float* calibrationIntercept)
+{
+	float voltageSum = 0;
+	float voltageSquaredSum = 0;
+	float weightSum = 0;
+	float voltageWeightSum = 0;
+	int length = arr->used;
+
+	for(int i = 0; i < length; i++)
+	{
+		float tmpVoltage = arr->array[i].voltage;
+		float tmpWeight = arr->array[i].weight;
+		voltageSum += tmpVoltage;
+		voltageSquaredSum += tmpVoltage * tmpVoltage;
+		weightSum += tmpWeight;
+		voltageWeightSum += tmpVoltage * tmpWeight;
+	}
+
+	*calibrationSlope = (length * voltageWeightSum - voltageSum * weightSum) / (length * voltageSquaredSum - voltageSum * voltageSum);
+	*calibrationIntercept = (weightSum * voltageSquaredSum - voltageSum * voltageWeightSum) / (length * voltageSquaredSum - voltageSum * voltageSum);
+}
+
+float getLoadCellVoltage(uint8_t loadCell)
+{
+	unsigned long buffer = 0;
+	float voltage;
+
+	switch(loadCell)
+	{
+		case 0:
+			adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 1);
+			buffer = adcSingleConversion(1);
+			break;
+		case 1:
+			adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 1);
+			buffer = adcSingleConversion(1);
+			break;
+		case 2:
+			adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 2);
+			buffer = adcSingleConversion(2);
+			break;
+		case 3:
+			adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 2);
+			buffer = adcSingleConversion(2);
+			break;
+	}
+
+	voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
+	return voltage;
+}
+
+void displayWeight(float weight)
+{
+	char weightStr[7];
+
+	floatToString(weight, weightStr, 2);
+	//sprintf(display,"%s kg", weightString);
+	//ra6963ClearText();
+	//ra6963TextGoTo(0,0);
+	//ra6963WriteString(display);
+	ra6963WriteBigChar(weightStr[0], 9, 24);
+	ra6963WriteBigChar(weightStr[1], 57, 24);
+	ra6963WriteBigChar(weightStr[3], 113, 24);
+	ra6963WriteBigChar(weightStr[4], 161, 24);
+}
+
+
+float getAverageLoadCellVoltage(uint8_t loadCell)
+{
+	unsigned long buffer = 0;
+	float voltage;
+
+	switch(loadCell)
+	{
+		case 0:
+			adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 1);
+			buffer = adcContinuousReadAvg(50, 1);
+			break;
+		case 1:
+			adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 1);
+			buffer = adcContinuousReadAvg(50, 1);
+			break;
+		case 2:
+			adcChannelSelect(AD7190_CH_AIN1P_AIN2M, 2);
+			buffer = adcContinuousReadAvg(50, 2);
+			break;
+		case 3:
+			adcChannelSelect(AD7190_CH_AIN3P_AIN4M, 2);
+			buffer = adcContinuousReadAvg(50, 2);
+			break;
+	}
+
+	voltage = ((float)buffer / 16777215ul) * 78.1 - 39.05;
+	return voltage;
+}
+
+void initCalibrationArray(Calibration_Array *arr, int initialSize)
+{
+	arr->array = (Calibration_Pair *)malloc(initialSize * sizeof(Calibration_Pair));
+	arr->used = 0;
+	arr->size = initialSize;
+}
+
+void insertArray(Calibration_Array *arr, Calibration_Pair pair)
+{
+	if(arr->used == arr->size)
+	{
+		arr->size *= 2;
+		arr->array = (Calibration_Pair *)realloc(arr->array, arr->size * sizeof(Calibration_Pair));
+	}
+	arr->array[arr->used++] = pair;
+}
+
+void freeArray(Calibration_Array *arr)
+{
+	free(arr->array);
+	arr->array = NULL;
+	arr->used = arr->size = 0;
 }
 
 void sdInit()
 {
 	if(FATFS_LinkDriver(&SD_Driver, mynewdiskPath) == 0)
 	{
-		f_mount(&mynewdiskFatFs, (TCHAR const*)mynewdiskPath, 0);
+		f_mount(&mynewdiskFatFs, (TCHAR const*)mynewdiskPath, 0) == FR_OK;
 	}
 }
 
-void sd_test()
+/*FATFS_UnLinkDriver(mynewdiskPath);
+clearScreen();
+ssd1306_WriteString("Unlinked", 1);
+updateScreen();
+HAL_Delay(1000);*/
+
+/*void sd_test()
 {
-	uint32_t wbytes; /* File write counts */
-	uint8_t wtext[] = "text to write logical disk"; /* File write buffer */
-	//char line[15];
+	//uint32_t wbytes; /* File write counts */
+	//uint8_t wtext[] = "text to write logical disk"; /* File write buffer */
+	/*char line[15];
 
 	setSdSpi();
 
 	if(FATFS_LinkDriver(&SD_Driver, mynewdiskPath) == 0)
 	{
-		/*ra6963ClearText();
+		ra6963ClearText();
 		ra6963TextGoTo(0, 0);
 		ra6963WriteString("Linked");
-		HAL_Delay(1000);*/
+		HAL_Delay(1000);
 		if(f_mount(&mynewdiskFatFs, (TCHAR const*)mynewdiskPath, 0) == FR_OK)
 		{
-			/*ra6963ClearText();
+			ra6963ClearText();
 			ra6963TextGoTo(0, 0);
 			ra6963WriteString("Mounted");
-			HAL_Delay(1000);*/
-			if(f_open(&MyFile, "STM35.TXT", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
-			//if(f_open(&MyFile, "STM32.TXT", FA_READ) == FR_OK)
+			HAL_Delay(1000);
+//			if(f_open(&MyFile, "STM32.TXT", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+			if(f_open(&MyFile, "STM32.TXT", FA_READ) == FR_OK)
 			{
-				/*ra6963ClearText();
+				ra6963ClearText();
 				ra6963TextGoTo(0, 0);
 				ra6963WriteString("Opened");
-				HAL_Delay(1000);*/
-				if(f_write(&MyFile, wtext, sizeof(wtext), (void *)&wbytes) == FR_OK)
-//				f_gets(line, sizeof(line), &MyFile);
-				{
-					/*ra6963ClearText();
+				HAL_Delay(1000);
+//				if(f_write(&MyFile, wtext, sizeof(wtext), (void *)&wbytes) == FR_OK)
+				f_gets(line, sizeof(line), &MyFile);
+//				{
+					ra6963ClearText();
 					ra6963TextGoTo(0, 0);
-					ra6963WriteString("Written");*/
-//					ra6963WriteString("Read");
-//					ra6963WriteString(line);
-//					HAL_Delay(1000);
+//					ra6963WriteString("Written");
+					ra6963WriteString("Read");
+					ra6963WriteString(line);
+					HAL_Delay(1000);
 					f_close(&MyFile);
-					/*ra6963ClearText();
+					ra6963ClearText();
 					ra6963TextGoTo(0, 0);
 					ra6963WriteString("Closed");
-					HAL_Delay(1000);*/
-				}
+					HAL_Delay(1000);
+//				}
 			}
 		}
 	}
 	FATFS_UnLinkDriver(mynewdiskPath);
-	/*ra6963ClearText();
+	ra6963ClearText();
 	ra6963TextGoTo(0, 0);
 	ra6963WriteString("Unlinked");
-	HAL_Delay(1000);*/
-}
-
-void setSdSpi()
-{
-	//SPI1 parameter configuration
-	hspi1.Instance = SPI1;
-	hspi1.Init.Mode = SPI_MODE_MASTER;
-	hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-	hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-	hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-	hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-	hspi1.Init.NSS = SPI_NSS_SOFT;
-	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
-	hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-	hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-	hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-	hspi1.Init.CRCPolynomial = 10;
-	if (HAL_SPI_Init(&hspi1) != HAL_OK)
-	{
-		_Error_Handler(__FILE__, __LINE__);
-	}
-}
+	HAL_Delay(1000);
+}*/
 /* USER CODE END 4 */
 
 /**

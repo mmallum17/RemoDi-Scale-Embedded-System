@@ -16,8 +16,9 @@ void wifiConnect()
 {
     esp8266Write("AT+CWQAP", 80, 500);
 	//esp8266Write("AT+CWJAP_CUR=\"SCOTTCAMPUS\",\"mavericks\"", 76, 10000);
-	esp8266Write("AT+CWJAP_CUR=\"Hold The Door\",\"sset957578peekaboo64\"", 87 , 10000);
+	//esp8266Write("AT+CWJAP_CUR=\"Hold The Door\",\"sset957578peekaboo64\"", 87 , 10000);
 	//esp8266Write("AT+CWJAP_CUR=\"Connectify-Scale\",\"vezopyc4\"", 80, 10000);
+	esp8266Write("AT+CWJAP_CUR=\"Collin\",\"CantTouchThis\"", 75 , 10000);
 }
 
 void serverConnect(/*char* serverName*/)

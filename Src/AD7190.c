@@ -297,6 +297,8 @@ unsigned long AD7190_ContinuousReadAvg(unsigned char sampleNumber)
     unsigned long samplesAverage = 0x0;
     unsigned char count = 0x0;
     unsigned long command = 0x0;
+    unsigned long minimum = 0xFFFFFFFF;
+    unsigned long tmp;
     
     command = AD7190_MODE_SEL(AD7190_MODE_CONT) | 
               AD7190_MODE_CLKSRC(AD7190_CLK_INT) |
@@ -306,9 +308,16 @@ unsigned long AD7190_ContinuousReadAvg(unsigned char sampleNumber)
     for(count = 0;count < sampleNumber;count ++)
     {
         AD7190_WaitRdyGoLow();
-        samplesAverage += AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0); // CS is not modified.
+        tmp = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+        samplesAverage += tmp; // CS is not modified.
+        if(tmp < minimum)
+        {
+        	minimum = tmp;
+        }
     }
     //ADI_PART_CS_HIGH();
+    samplesAverage = samplesAverage - minimum;
+    sampleNumber--;
     samplesAverage = samplesAverage / sampleNumber;
     
     return samplesAverage ;
