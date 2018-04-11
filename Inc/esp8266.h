@@ -13,5 +13,6 @@ void serverClose();
 void wifiConnect();
 void esp8266Write(char* command, uint16_t readBytes, uint32_t timeout);
 void serverWrite(char* command, uint32_t timeout);
+void serverRead(char* response, uint32_t timeout);
 
 #endif /* ESP8266_H_ */

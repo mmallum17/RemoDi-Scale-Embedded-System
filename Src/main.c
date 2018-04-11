@@ -107,7 +107,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_UART4_Init(void);
-static void MX_RTC_Init(void);
+static void MX_RTC_Init(RTC_TimeTypeDef* time, RTC_DateTypeDef* date);
 void sdInit();
 void sd_test();
 void setSdSpi();
@@ -142,6 +142,9 @@ int main(void)
   char weightTwoString[10] = {0};
   char weightThreeString[10] = {0};
   char display[30] = {0};
+  char* token;
+  RTC_TimeTypeDef time;
+  RTC_DateTypeDef date;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -165,7 +168,7 @@ int main(void)
   MX_SPI1_Init();
   MX_UART4_Init();
   //MX_FATFS_Init();
-  MX_RTC_Init();
+  //MX_RTC_Init();
 
   /* USER CODE BEGIN 2 */
   buttonsInit();
@@ -174,11 +177,14 @@ int main(void)
   sdInit();
   setAdcSpi();
 
-  /*ra6963TextGoTo(0, 0);
-  ra6963WriteString("RemoDi Scale");
+  ra6963TextGoTo(12, 0);
+  ra6963WriteString("RemoDi");
 
-  ra6963TextGoTo(21, 0);
-  ra6963WriteString("12:36 PM");
+  /*ra6963TextGoTo(0, 0);
+  ra6963WriteString("10/11/18");
+
+  ra6963TextGoTo(22, 0);
+  ra6963WriteString("12:36 PM");*/
 
   ra6963Rectangle(0, 14, 240, 100);
   ra6963Rectangle(1, 15, 238, 98);
@@ -196,13 +202,34 @@ int main(void)
   drawImage(211, 69, 32, 24, gChar);
 
   ra6963TextGoTo(0, 15);
-  ra6963WriteString("ALERT:");*/
+  ra6963WriteString("ALERT:");
   /*ra6963ClearGraphic();
   ra6963ClearText();
   ra6963ClearCG();*/
 
-  /*wifiConnect();
-  serverConnect();*/
+  wifiConnect();
+  serverConnect();
+  serverWrite("T", 50);
+  serverRead(display, 5000);
+
+  /*ra6963TextGoTo(0, 0);
+  ra6963WriteString(display);*/
+
+  token = strtok(display, ",");
+  date.Year = atoi(token);
+  token = strtok(NULL, ",");
+  date.Month = atoi(token);
+  token = strtok(NULL, ",");
+  date.Date = atoi(token);
+
+  token = strtok(NULL, ",");
+  time.Hours = atoi(token);
+  token = strtok(NULL, ",");
+  time.Minutes = atoi(token);
+  token = strtok(NULL, ",");
+  time.Seconds = atoi(token);
+
+  MX_RTC_Init(&time, &date);
 
   //sd_test();
 
@@ -217,7 +244,7 @@ int main(void)
   calibrationSlope3 = readEepromFloat(CAL_SLOPE_ADD_3);
   calibrationIntercept3 = readEepromFloat(CAL_INT_ADD_3);
 
-  if(adcInit(1) && adcInit(2))
+  /*if(adcInit(1) && adcInit(2))
   {
 	  ra6963TextGoTo(0,0);
  	  ra6963WriteString("Part Present");
@@ -226,19 +253,13 @@ int main(void)
   {
  	  ra6963TextGoTo(0,0);
  	  ra6963WriteString("Part(s) Not Present");
-  }
+  }*/
+  adcInit(1);
+  adcInit(2);
   adcRangeSetup(0, AD7190_CONF_GAIN_128, 1);
   adcRangeSetup(0, AD7190_CONF_GAIN_128, 2);
 
   adcCalibrateAll();
-/*  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 1);
-  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 1);
-  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 1);
-  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 1);
-  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN1P_AIN2M, 2);
-  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN1P_AIN2M, 2);
-  adcCalibrate(AD7190_MODE_CAL_INT_ZERO, AD7190_CH_AIN3P_AIN4M, 2);
-  adcCalibrate(AD7190_MODE_CAL_INT_FULL, AD7190_CH_AIN3P_AIN4M, 2);*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -281,14 +302,30 @@ int main(void)
 	  floatToString(weight[3], weightThreeString, 2);
 	  totalWeight = (weight[0] + weight[1] + weight[2] + weight[3]) / 4;
 
-	  /*displayWeight(totalWeight);*/
+	  HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+	  HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+	  sprintf(display, "%02d/%02d/%02d", date.Month, date.Date, date.Year);
+	  //ra6963ClearText();
+	  ra6963TextGoTo(0, 0);
+	  ra6963WriteString(display);
+	  if(time.Hours > 11)
+	  {
+		  sprintf(display, "%02d:%02d PM", time.Hours, time.Minutes);
+	  }
+	  else
+	  {
+		  sprintf(display, "%02d:%02d AM", time.Hours, time.Minutes);
+	  }
+	  ra6963TextGoTo(22, 0);
+	  ra6963WriteString(display);
+	  displayWeight(totalWeight);
 	  /*floatToString(totalWeight, weightString, 2);
 	  sprintf(display,"%s kg", weightString);
 	  ra6963ClearText();
 	  ra6963TextGoTo(0,0);
-	  ra6963WriteString(display);*/
+	  ra6963WriteString(display);
 
-	  sprintf(display, "L,%s,%s,%s,%s", weightZeroString, weightOneString, weightTwoString, weightThreeString);
+	  /*sprintf(display, "L,%s,%s,%s,%s", weightZeroString, weightOneString, weightTwoString, weightThreeString);
 	  serverWrite(display, 10);
 	  setSdSpi();
 	  if(f_open(&MyFile, "LOG.CSV", FA_OPEN_ALWAYS | FA_WRITE) == FR_OK)
@@ -298,7 +335,7 @@ int main(void)
 		  f_putc('\n', &MyFile);
 		  f_close(&MyFile);
 	  }
-	  setAdcSpi();
+	  setAdcSpi();*/
 
 	  /*floatToString(calibrationSlope0, weightString, 2);
 	  ra6963TextGoTo(0,1);
@@ -395,7 +432,7 @@ void SystemClock_Config(void)
 }
 
 /* RTC init function */
-static void MX_RTC_Init(void)
+static void MX_RTC_Init(RTC_TimeTypeDef* time, RTC_DateTypeDef* date)
 {
 
   RTC_TimeTypeDef sTime;
@@ -406,7 +443,7 @@ static void MX_RTC_Init(void)
   hrtc.Instance = RTC;
   hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
   hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 313;
+  hrtc.Init.SynchPrediv = 300;
   hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
   hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
   hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
@@ -417,10 +454,10 @@ static void MX_RTC_Init(void)
 
     /**Initialize RTC and set the Time and Date 
     */
-  if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0x32F2){
-  sTime.Hours = 0;
-  sTime.Minutes = 0;
-  sTime.Seconds = 0;
+  //if(HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0x32F2){
+  sTime.Hours = time->Hours;
+  sTime.Minutes = time->Minutes;
+  sTime.Seconds = time->Seconds;
   sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sTime.StoreOperation = RTC_STOREOPERATION_RESET;
   if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
@@ -429,17 +466,17 @@ static void MX_RTC_Init(void)
   }
 
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 1;
-  sDate.Year = 0;
+  sDate.Month = date->Month;
+  sDate.Date = date->Date;
+  sDate.Year = date->Year;
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
-    HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F2);
-  }
+    //HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F2);
+  //}
 
 }
 
