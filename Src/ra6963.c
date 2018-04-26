@@ -12,7 +12,7 @@
 unsigned char ra6963In();
 void ra6963Out(unsigned char outByte);
 
-const char color = 1;
+//const char color = 1;
 
 const unsigned char negative [] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -641,7 +641,7 @@ unsigned char ra6963In()
 }
 
 /****************GRAPHICS***********************/
-void ra6963Rectangle(unsigned char x, unsigned char y, unsigned char b, unsigned char a)
+void ra6963Rectangle(unsigned char x, unsigned char y, unsigned char b, unsigned char a, unsigned char color)
 {
 	unsigned char j;
 	for (j = 0; j < a; j++)
@@ -656,7 +656,7 @@ void ra6963Rectangle(unsigned char x, unsigned char y, unsigned char b, unsigned
 	}
 }
 
-void ra6963Circle(unsigned char cx, unsigned char cy ,unsigned char radius)
+void ra6963Circle(unsigned char cx, unsigned char cy ,unsigned char radius, unsigned char color)
 {
 	int x, y, xchange, ychange, radiusError;
 	x = radius;
@@ -686,7 +686,7 @@ void ra6963Circle(unsigned char cx, unsigned char cy ,unsigned char radius)
 	}
 }
 
-void ra6963Line(int X1, int Y1,int X2,int Y2)
+void ra6963Line(int X1, int Y1,int X2,int Y2, unsigned char color)
 {
 	int CurrentX, CurrentY, Xinc, Yinc,
     Dx, Dy, TwoDx, TwoDy,

@@ -84,6 +84,11 @@ float calibrationSlope2 = 0;
 float calibrationIntercept2 = 0;
 float calibrationSlope3 = 0;
 float calibrationIntercept3 = 0;
+uint8_t disp = 1;
+float tare = 0;
+float zero = 0;
+uint8_t gross = 1;
+uint8_t kgUnits = 1;
 const unsigned char kChar [] = {
 0xFC, 0x00, 0xFC, 0xFC, 0x00, 0xF8, 0xFC, 0x01, 0xF0, 0xFC, 0x03, 0xE0, 0xFC, 0x07, 0xE0, 0xFC,
 0x0F, 0xC0, 0xFC, 0x0F, 0x80, 0xFC, 0x1F, 0x00, 0xFC, 0x3E, 0x00, 0xFC, 0x7E, 0x00, 0xFC, 0xFC,
@@ -99,6 +104,23 @@ const unsigned char gChar [] = {
 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC, 0x07, 0xFF, 0xFC,
 0x00, 0x3F, 0xFC, 0x00, 0x3F, 0x7C, 0x00, 0x3E, 0x7C, 0x00, 0x3E, 0x7C, 0x00, 0x3E, 0x7E, 0x00,
 0x7E, 0x3F, 0xFF, 0xFC, 0x3F, 0xFF, 0xFC, 0x1F, 0xFF, 0xF8, 0x07, 0xFF, 0xE0, 0x00, 0x3C, 0x00
+};
+const unsigned char lChar [] = {
+0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC,
+0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00,
+0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00,
+0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC,
+0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xFC, 0x00,
+0x00, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFE
+};
+
+const unsigned char bChar [] = {
+0xFF, 0xFC, 0x00, 0xFF, 0xFF, 0xE0, 0xFF, 0xFF, 0xF8, 0xFF, 0xFF, 0xFC, 0xFF, 0xFF, 0xFC, 0xFC,
+0x00, 0x7E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3F, 0xFC, 0x00,
+0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFF, 0xFF, 0xFC, 0xFF, 0xFF, 0xF8,
+0xFF, 0xFF, 0xF8, 0xFF, 0xFF, 0xFC, 0xFF, 0xFF, 0xFC, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC,
+0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00, 0x3E, 0xFC, 0x00,
+0x7E, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFC, 0xFF, 0xFF, 0xF8, 0xFF, 0xFF, 0xE0, 0xFF, 0xFC, 0x00
 };
 /* USER CODE END PV */
 
@@ -120,6 +142,14 @@ void freeArray(Calibration_Array *arr);
 void linearReg(Calibration_Array *arr, float* calibrationSlope, float* calibrationIntercept);
 float getAverageLoadCellVoltage(uint8_t loadCell);
 void displayWeight(float weight);
+void menu();
+void units();
+void zeroFunction();
+void tareFunction();
+void displayTare();
+void grossNet();
+void initDisplay();
+void displayGross(int x, int y);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -141,10 +171,18 @@ int main(void)
   char weightOneString[10] = {0};
   char weightTwoString[10] = {0};
   char weightThreeString[10] = {0};
-  char display[30] = {0};
+  char display[50] = {0};
+  char* eccentricityStr = "Eccentricity Error";
+  char* driftStr = "Drift Error       ";
+  char* nullStr = "                  ";
+  char* errStr = nullStr;
   char* token;
+  float eccentricityDifference;
+  float driftDifferenceOne;
+  float driftDifferenceTwo;
   RTC_TimeTypeDef time;
   RTC_DateTypeDef date;
+
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -177,43 +215,12 @@ int main(void)
   sdInit();
   setAdcSpi();
 
-  ra6963TextGoTo(12, 0);
-  ra6963WriteString("RemoDi");
-
-  /*ra6963TextGoTo(0, 0);
-  ra6963WriteString("10/11/18");
-
-  ra6963TextGoTo(22, 0);
-  ra6963WriteString("12:36 PM");*/
-
-  ra6963Rectangle(0, 14, 240, 100);
-  ra6963Rectangle(1, 15, 238, 98);
-
-  ra6963WriteBigChar('0', 9, 24);
-  ra6963WriteBigChar('0', 57, 24);
-  ra6963WriteBigChar('0', 113, 24);
-  ra6963WriteBigChar('0', 161, 24);
-
-  ra6963Rectangle(99, 96, 8, 8);
-  ra6963Rectangle(100, 97, 6, 6);
-  ra6963Rectangle(101, 98, 4, 4);
-  ra6963Rectangle(102, 99, 2, 2);
-  drawImage(211, 27, 32, 24, kChar);
-  drawImage(211, 69, 32, 24, gChar);
-
-  ra6963TextGoTo(0, 15);
-  ra6963WriteString("ALERT:");
-  /*ra6963ClearGraphic();
-  ra6963ClearText();
-  ra6963ClearCG();*/
+  initDisplay();
 
   wifiConnect();
   serverConnect();
   serverWrite("T", 50);
   serverRead(display, 5000);
-
-  /*ra6963TextGoTo(0, 0);
-  ra6963WriteString(display);*/
 
   token = strtok(display, ",");
   date.Year = atoi(token);
@@ -266,6 +273,11 @@ int main(void)
   /* USER CODE BEGIN 3 */
   while (1)
   {
+	  /*if(!disp)
+	  {
+		  initDisplay();
+		  disp = 1;
+	  }*/
 	  /*voltage = getAverageLoadCellVoltage(0);
 	  floatToString(voltage, display, 4);
 	  ra6963ClearText();
@@ -302,15 +314,35 @@ int main(void)
 	  floatToString(weight[3], weightThreeString, 2);
 	  totalWeight = (weight[0] + weight[1] + weight[2] + weight[3]) / 4;
 
+	  errStr = nullStr;
+	  eccentricityDifference = (weight[0] + weight[1]) / 2 - (weight[2] + weight[3])/2;
+	  if(eccentricityDifference >= 0.06 || eccentricityDifference <= -0.06)
+	  {
+		  errStr = eccentricityStr;
+	  }
+
+	  driftDifferenceOne = weight[0] - weight[1];
+	  driftDifferenceTwo = weight[2] - weight[3];
+	  if(driftDifferenceOne >= 0.06 || driftDifferenceOne <= -0.06 || driftDifferenceTwo >= 0.06 || driftDifferenceTwo <= -0.06)
+	  {
+		  errStr = driftStr;
+	  }
+	  ra6963TextGoTo(7, 15);
+	  ra6963WriteString(errStr);
+
 	  HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
 	  HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
 	  sprintf(display, "%02d/%02d/%02d", date.Month, date.Date, date.Year);
 	  //ra6963ClearText();
 	  ra6963TextGoTo(0, 0);
 	  ra6963WriteString(display);
-	  if(time.Hours > 11)
+	  if(time.Hours == 12)
 	  {
 		  sprintf(display, "%02d:%02d PM", time.Hours, time.Minutes);
+	  }
+	  else if(time.Hours > 11)
+	  {
+		  sprintf(display, "%02d:%02d PM", time.Hours - 12, time.Minutes);
 	  }
 	  else
 	  {
@@ -323,19 +355,20 @@ int main(void)
 	  sprintf(display,"%s kg", weightString);
 	  ra6963ClearText();
 	  ra6963TextGoTo(0,0);
-	  ra6963WriteString(display);
+	  ra6963WriteString(display);*/
 
-	  /*sprintf(display, "L,%s,%s,%s,%s", weightZeroString, weightOneString, weightTwoString, weightThreeString);
+	  sprintf(display, "L,%s,%s,%s,%s", weightZeroString, weightOneString, weightTwoString, weightThreeString);
 	  serverWrite(display, 10);
+	  sprintf(display, "%02d/%02d/%02d %02d:%02d:%02d,%s,%s,%s,%s", date.Month, date.Date, date.Year, time.Hours, time.Minutes, time.Seconds, weightZeroString, weightOneString, weightTwoString, weightThreeString);
 	  setSdSpi();
-	  if(f_open(&MyFile, "LOG.CSV", FA_OPEN_ALWAYS | FA_WRITE) == FR_OK)
+	  if(f_open(&MyFile, "NEW_LOG.CSV", FA_OPEN_ALWAYS | FA_WRITE) == FR_OK)
 	  {
 		  f_lseek(&MyFile, f_size(&MyFile));
 		  f_puts(display, &MyFile);
 		  f_putc('\n', &MyFile);
 		  f_close(&MyFile);
 	  }
-	  setAdcSpi();*/
+	  setAdcSpi();
 
 	  /*floatToString(calibrationSlope0, weightString, 2);
 	  ra6963TextGoTo(0,1);
@@ -631,7 +664,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(WIFI_RESET_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ROW_1_Pin ROW_2_Pin */
-  GPIO_InitStruct.Pin = ROW_1_Pin|ROW_2_Pin;
+  GPIO_InitStruct.Pin = ROW_1_Pin | ROW_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -649,21 +682,41 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	uint8_t col;
 	//char display[30];
 	delay(50);
-	if(GPIO_Pin == GPIO_PIN_5)
+	if(GPIO_Pin == GPIO_PIN_6 /*GPIO_PIN_5*/)
 	{
-		col = getCol(1);
+		//col = getCol(1);
+		col = getCol(2);
 		if(col >= 0 && col <= 11)
 		{
-			switch(col)
+			switch(col + 12)
 			{
 				case CALIBRATE:
 					calibrate();
 					break;
-				default:
+				case MENU:
+					menu();
+					break;
+				case UNITS:
+					units();
+					break;
+				case ZERO_FN:
+					zeroFunction();
+					break;
+				case TARE:
+					tareFunction();
+					break;
+				case DISPLAY_TARE:
+					displayTare();
+					break;
+				case GROSS_NET:
+					grossNet();
+					break;
+				/*default:
 					ra6963ClearText();
 					ra6963TextGoTo(0, 0);
-					ra6963WriteString("NOT CALIBRATION MODE");
+					ra6963WriteString("NOT CALIBRATION MODE");*/
 			}
+			initDisplay();
 		}
 
 /*		if(col >= 1 && col <= 12)
@@ -680,9 +733,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			//ra6963WriteString(buttonStrings[key]);
 		}*/
 		setAllCols();
-		while(readRow(1));
+		while(readRow(2));
+		//while(readRow(1));
 	}
-	else if(GPIO_Pin == GPIO_PIN_6)
+	/*else if(GPIO_Pin == GPIO_PIN_6)
 	{
 		col = getCol(2);
 		if(col >= 0 && col <= 11)
@@ -690,6 +744,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			ra6963ClearText();
 			ra6963TextGoTo(0, 0);
 			ra6963WriteString("NOT CALIBRATION MODE");
+			//disp = 0;
+			initDisplay();
 			//count++;
 			//ra6963ClearText();
 			//ra6963TextGoTo(count, 0);
@@ -702,7 +758,257 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		}
 		setAllCols();
 		while(readRow(2));
-	}
+	}*/
+}
+
+void initDisplay()
+{
+	  ra6963ClearGraphic();
+	  ra6963ClearText();
+	  ra6963TextGoTo(12, 0);
+	  ra6963WriteString("RemoDi");
+
+	  /*ra6963TextGoTo(0, 0);
+	  ra6963WriteString("10/11/18");
+
+	  ra6963TextGoTo(22, 0);
+	  ra6963WriteString("12:36 PM");*/
+
+	  ra6963Rectangle(0, 14, 240, 100, 1);
+	  ra6963Rectangle(1, 15, 238, 98, 1);
+
+	  ra6963WriteBigChar('0', 9, 24);
+	  ra6963WriteBigChar('0', 57, 24);
+	  ra6963WriteBigChar('0', 113, 24);
+	  ra6963WriteBigChar('0', 161, 24);
+
+	  ra6963Rectangle(99, 96, 8, 8, 1);
+	  ra6963Rectangle(100, 97, 6, 6, 1);
+	  ra6963Rectangle(101, 98, 4, 4, 1);
+	  ra6963Rectangle(102, 99, 2, 2, 1);
+
+	  if(kgUnits)
+	  {
+		  drawImage(211, 27, 32, 24, kChar);
+		  drawImage(211, 61, 32, 24, gChar);
+		  //drawImage(211, 69, 32, 24, gChar);
+	  }
+	  else
+	  {
+		  drawImage(211, 27, 32, 24, lChar);
+		  drawImage(211, 61, 32, 24, bChar);
+		  //drawImage(211, 69, 32, 24, bChar);
+	  }
+
+	  displayGross(209, 98);
+	  /*if(gross)
+	  {
+		  // Draw G
+		  ra6963Line(211, 103, 214, 103);
+		  ra6963Line(211, 103, 211, 107);
+		  ra6963Line(211, 107, 214, 107);
+		  ra6963Line(214, 105, 214, 107);
+		  ra6963Line(213, 105, 214, 105);
+
+		  // Draw R
+		  ra6963Line(216, 103, 218, 103);
+		  ra6963Line(216, 103, 216, 107);
+		  ra6963Line(218, 103, 218, 105);
+		  ra6963Line(216, 105, 218, 105);
+		  ra6963Line(216, 105, 218, 107);
+
+		  // Draw O
+		  ra6963Line(220, 103, 223, 103);
+		  ra6963Line(220, 103, 220, 107);
+		  ra6963Line(220, 107, 223, 107);
+		  ra6963Line(223, 103, 223, 107);
+
+		  // Draw S
+		  ra6963Line(225, 103, 227, 103);
+		  ra6963Line(225, 103, 225, 105);
+		  ra6963Line(225, 105, 227, 105);
+		  ra6963Line(227, 105, 227, 107);
+		  ra6963Line(225, 107, 227, 107);
+
+		  // Draw S
+		  ra6963Line(229, 103, 231, 103);
+		  ra6963Line(229, 103, 229, 105);
+		  ra6963Line(229, 105, 231, 105);
+		  ra6963Line(231, 105, 231, 107);
+		  ra6963Line(229, 107, 231, 107);
+	  }
+	  else
+	  {
+		  // Draw N
+		  ra6963Line(211, 103, 211, 107);
+		  ra6963Line(211, 103, 215, 107);
+		  ra6963Line(215, 103, 215, 107);
+
+		  // Draw E
+		  ra6963Line(217, 103, 217, 107);
+		  ra6963Line(217, 103, 219, 103);
+		  ra6963Line(217, 105, 219, 105);
+		  ra6963Line(217, 107, 219, 107);
+
+		  // Draw T
+		  ra6963Line(221, 103, 225, 103);
+		  ra6963Line(223, 103, 223, 107);
+	  }*/
+
+
+	  ra6963TextGoTo(0, 15);
+	  ra6963WriteString("ALERT:");
+}
+
+void displayGross(int x, int y)
+{
+	  ra6963Rectangle(x, y, 20, 5, 0);
+	  ra6963Rectangle(x + 1, y + 1, 18, 3, 0);
+	  ra6963Rectangle(x + 2, y + 2, 16, 1, 0);
+
+	  ra6963Rectangle(x - 2, y - 2, 25, 9, 1);
+	  if(gross)
+	  {
+		  /*x = 211;
+		  y = 103;*/
+		  // Draw G
+		  ra6963Line(x, y, x + 3, y, 1);
+		  ra6963Line(x, y, x, y + 4, 1);
+		  ra6963Line(x, y + 4, x + 3, y + 4, 1);
+		  ra6963Line(x + 3, y + 2, x + 3, y + 4, 1);
+		  ra6963Line(x + 2, y + 2, x + 3, y + 2, 1);
+
+		  // Draw R
+		  ra6963Line(x + 5, y, x + 7, y, 1);
+		  ra6963Line(x + 5, y, x + 5, y + 4, 1);
+		  ra6963Line(x + 7, y, x + 7, y + 2, 1);
+		  ra6963Line(x + 5, y + 2, x + 7, y + 2, 1);
+		  ra6963Line(x + 5, y + 2, x + 7, y + 4, 1);
+
+		  // Draw O
+		  ra6963Line(x + 9, y, x + 12, y, 1);
+		  ra6963Line(x + 9, y, x + 9, y + 4, 1);
+		  ra6963Line(x + 9, y + 4, x + 12, y + 4, 1);
+		  ra6963Line(x + 12, y, x + 12, y + 4, 1);
+
+		  // Draw S
+		  ra6963Line(x + 14, y, x + 16, y, 1);
+		  ra6963Line(x + 14, y, x + 14, y + 2, 1);
+		  ra6963Line(x + 14, y + 2, x + 16, y + 2, 1);
+		  ra6963Line(x + 16, y + 2, x + 16, y + 4, 1);
+		  ra6963Line(x + 14, y + 4, x + 16, y + 4, 1);
+
+		  // Draw S
+		  ra6963Line(x + 18, y, x + 20, y, 1);
+		  ra6963Line(x + 18, y, x + 18, y + 2, 1);
+		  ra6963Line(x + 18, y + 2, x + 20, y + 2, 1);
+		  ra6963Line(x + 20, y + 2, x + 20, y + 4, 1);
+		  ra6963Line(x + 18, y + 4, x + 20, y + 4, 1);
+	  }
+	  else
+	  {
+		  // Draw N
+		  ra6963Line(x + 4, y, x + 4, y + 4, 1);
+		  ra6963Line(x + 4, y, x + 8, y + 4, 1);
+		  ra6963Line(x + 8, y, x + 8, y + 4, 1);
+
+		  // Draw E
+		  ra6963Line(x + 10, y, x + 10, y + 4, 1);
+		  ra6963Line(x + 10, y, x + 12, y, 1);
+		  ra6963Line(x + 10, y + 2, x + 12, y + 2, 1);
+		  ra6963Line(x + 10, y + 4, x + 12, y + 4, 1);
+
+		  // Draw T
+		  ra6963Line(x + 14, y, x + 18, y, 1);
+		  ra6963Line(x + 16, y, x + 16, y + 4, 1);
+	  }
+}
+
+void menu()
+{
+	ra6963ClearGraphic();
+	ra6963ClearText();
+	ra6963TextGoTo(0, 0);
+	ra6963WriteString("1. Calibration Settings");
+	ra6963TextGoTo(0, 2);
+	ra6963WriteString("2. Error Detection Settings");
+	ra6963TextGoTo(0, 4);
+	ra6963WriteString("3. Wi-Fi");
+	ra6963TextGoTo(0, 6);
+	ra6963WriteString("4. SD Card");
+	ra6963TextGoTo(0, 6);
+	ra6963WriteString("5. Date/Time");
+	ra6963TextGoTo(0, 8);
+	ra6963WriteString("6. Info");
+	ra6963TextGoTo(0, 10);
+	ra6963WriteString("7. Back");
+	//ra6963WriteString("MENU");
+	getKey();
+}
+
+void units()
+{
+	kgUnits = !kgUnits;
+	/*ra6963ClearGraphic();
+	ra6963ClearText();
+	ra6963TextGoTo(0, 0);
+	ra6963WriteString("UNITS");
+	getKey();*/
+}
+
+void zeroFunction()
+{
+	float weight = 0;
+	float voltage = 0;
+
+	voltage = getAverageLoadCellVoltage(0);
+	weight += voltage * calibrationSlope0 + calibrationIntercept0;
+	voltage = getAverageLoadCellVoltage(1);
+	weight += voltage * calibrationSlope1 + calibrationIntercept1;
+	voltage = getAverageLoadCellVoltage(2);
+	weight += voltage * calibrationSlope2 + calibrationIntercept2;
+	voltage = getAverageLoadCellVoltage(3);
+	weight += voltage * calibrationSlope3 + calibrationIntercept3;
+	zero = weight / 4;
+	/*ra6963ClearGraphic();
+	ra6963ClearText();
+	ra6963TextGoTo(0, 0);
+	ra6963WriteString("ZERO");
+	getKey();*/
+}
+
+void tareFunction()
+{
+	float weight = 0;
+	float voltage = 0;
+
+	voltage = getAverageLoadCellVoltage(0);
+	weight += voltage * calibrationSlope0 + calibrationIntercept0;
+	voltage = getAverageLoadCellVoltage(1);
+	weight += voltage * calibrationSlope1 + calibrationIntercept1;
+	voltage = getAverageLoadCellVoltage(2);
+	weight += voltage * calibrationSlope2 + calibrationIntercept2;
+	voltage = getAverageLoadCellVoltage(3);
+	weight += voltage * calibrationSlope3 + calibrationIntercept3;
+	tare = weight / 4 - zero;
+}
+
+void displayTare()
+{
+	char display[10] = {0};
+
+	floatToString(tare, display, 2);
+	ra6963ClearGraphic();
+	ra6963ClearText();
+	ra6963TextGoTo(0, 0);
+	ra6963WriteString("TARE: ");
+	ra6963TextGoTo(0, 6);
+	ra6963WriteString(display);
+}
+
+void grossNet()
+{
+	gross = !gross;
 }
 
 void setAdcSpi()
@@ -744,6 +1050,7 @@ void calibrate()
 	float cWeight;
 	char cWeightStr[10] = {0};
 	char display [30];
+	int tempLength;
 
 	// Initialize arrays if not already initialized
 	if(!init)
@@ -756,6 +1063,7 @@ void calibrate()
 	}
 
 	ra6963ClearText();
+	ra6963ClearGraphic();
 	ra6963TextGoTo(0, 0);
 	ra6963WriteString("CALIBRATION MODE");
 
@@ -896,6 +1204,15 @@ void calibrate()
 				strcat(cWeightStr, ".");
 				ra6963TextGoTo(13 + strlen(cWeightStr), 5);
 				ra6963WriteString(".");
+				break;
+			case DELETE:
+				tempLength = strlen(cWeightStr);
+				if(strlen(tempLength > 0))
+				{
+					ra6963TextGoTo(13 + tempLength, 5);
+					ra6963WriteString(" ");
+					cWeightStr[tempLength - 1] = 0;
+				}
 				break;
 		}
 	}while(key != ENTER);
@@ -1044,11 +1361,22 @@ void displayWeight(float weight)
 {
 	char weightStr[7];
 
+	// Check Gross
+	if(gross)
+	{
+		weight = weight - zero;
+	}
+	else
+	{
+		weight = weight - tare;
+	}
+
+	// Check Units
+	if(!kgUnits)
+	{
+		weight *= 2.2046226218488;
+	}
 	floatToString(weight, weightStr, 2);
-	//sprintf(display,"%s kg", weightString);
-	//ra6963ClearText();
-	//ra6963TextGoTo(0,0);
-	//ra6963WriteString(display);
 	ra6963WriteBigChar(weightStr[0], 9, 24);
 	ra6963WriteBigChar(weightStr[1], 57, 24);
 	ra6963WriteBigChar(weightStr[3], 113, 24);
